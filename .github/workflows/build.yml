@@ -1,0 +1,33 @@
+name: dotnet build
+
+on:
+  push:
+    branches: '*'
+    tags-ignore: '*'
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+    - name: Restore dependencies
+      run: dotnet restore
+    - name: Publish
+      run: dotnet publish --no-restore --configuration Release --nologo
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: POLUnpack-${{ matrix.os }}
+        path: |
+          ./POLUnpack/bin/Release/**/publish/POLUnpack*
+      

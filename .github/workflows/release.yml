@@ -1,0 +1,84 @@
+name: dotnet release
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Publish
+        run: dotnet publish --no-restore --configuration Release --nologo
+      
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: POLUnpack-${{ matrix.os }}-${{ github.ref_name }}
+          path: |
+            ./POLUnpack/bin/Release/**/publish/POLUnpack
+            ./POLUnpack/bin/Release/**/publish/POLUnpack.exe
+
+  create_release:
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: POLUnpack-ubuntu-latest-${{ github.ref_name }}
+          path: ./artifacts-linux-${{ github.ref_name }}
+      
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: POLUnpack-windows-latest-${{ github.ref_name }}
+          path: ./artifacts-win-${{ github.ref_name }}
+
+      - name: List files for debugging
+        run: |
+          echo "Files in the current directory:"
+          find . -type f
+
+
+      - name: Change artifact names
+        run: |
+          repo_name_lower=$(echo "${{ github.event.repository.name }}" | tr '[:upper:]' '[:lower:]')
+          artifact_name_win="${repo_name_lower}-win-x64-${{ github.ref_name }}.exe"
+          artifact_name_linux="${repo_name_lower}-linux-x64-${{ github.ref_name }}"
+          echo "artifact_name_win=${artifact_name_win}" >> $GITHUB_ENV
+          echo "artifact_name_linux=${artifact_name_linux}" >> $GITHUB_ENV
+          find ./artifacts-win-${{ github.ref_name }} -type f -name "POLUnpack.exe" -exec mv {} ./artifacts-win-${{ github.ref_name }}/${artifact_name_win} \;
+          find ./artifacts-linux-${{ github.ref_name }} -type f -name "POLUnpack" -exec mv {} ./artifacts-linux-${{ github.ref_name }}/${artifact_name_linux} \;
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda
+        with:
+          tag_name: ${{ github.ref }}
+          name: POLUnpack ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            ./artifacts-win-${{ github.ref_name }}/${{ env.artifact_name_win }}
+            ./artifacts-linux-${{ github.ref_name }}/${{ env.artifact_name_linux }}
